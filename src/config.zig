@@ -10,6 +10,7 @@ const builtin = @import("builtin");
 const std = @import("std");
 const assert = std.debug.assert;
 
+// 指定的src/tigerbeetle/main.zig
 const root = @import("root");
 
 const BuildOptions = struct {
@@ -282,6 +283,7 @@ pub const configs = struct {
         default_development;
 
     pub const current = current: {
+        // 获取build options
         var base = switch (build_options.config_base) {
             .default => default,
             .production => default_production,

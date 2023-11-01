@@ -4,6 +4,7 @@ const math = std.math;
 const mem = std.mem;
 const meta = std.meta;
 
+// 指定大小的内存池
 pub fn NodePool(comptime _node_size: u32, comptime _node_alignment: u13) type {
     return struct {
         const Self = @This();
@@ -21,6 +22,7 @@ pub fn NodePool(comptime _node_size: u32, comptime _node_alignment: u13) type {
             assert(node_size % node_alignment == 0);
         }
 
+        // 按照指定的大小内存对齐
         buffer: []align(node_alignment) u8,
         free: std.bit_set.DynamicBitSetUnmanaged,
 
@@ -58,10 +60,12 @@ pub fn NodePool(comptime _node_size: u32, comptime _node_alignment: u13) type {
             };
         }
 
+        // 获取一个节点
         pub fn acquire(pool: *Self) Node {
             // TODO: To ensure this "unreachable" is never reached, the primary must reject
             // new requests when storage space is too low to fulfill them.
             const node_index = pool.free.findFirstSet() orelse unreachable;
+            // 多次使用断言
             assert(pool.free.isSet(node_index));
             pool.free.unset(node_index);
 
@@ -132,6 +136,7 @@ fn TestContext(comptime node_size: usize, comptime node_alignment: u12) type {
                 var i: usize = 0;
                 while (i < context.node_count * 4) : (i += 1) {
                     switch (context.random.uintLessThanBiased(u32, 100)) {
+                        // 随机的acire恶化释放
                         0...59 => try context.acquire(),
                         60...99 => try context.release(),
                         else => unreachable,
@@ -220,6 +225,7 @@ test "NodePool" {
     var prng = std.rand.DefaultPrng.init(seed);
     const random = prng.random();
 
+    // 直接一个结构体
     const Tuple = struct {
         node_size: u32,
         node_alignment: u12,

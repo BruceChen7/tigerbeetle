@@ -99,6 +99,7 @@ pub fn TreeType(comptime TreeTable: type, comptime Storage: type) type {
         const CompactionType = @import("compaction.zig").CompactionType;
         const Compaction = CompactionType(Table, Tree, Storage);
 
+        // 可以在结构体中定义另一个结构体
         pub const LookupMemoryResult = union(enum) {
             negative,
             positive: *const Value,

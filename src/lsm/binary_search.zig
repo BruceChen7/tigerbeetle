@@ -6,6 +6,7 @@ const stdx = @import("../stdx.zig");
 
 const constants = @import("../constants.zig");
 
+// 可以有默认值
 pub const Config = struct {
     mode: enum { lower_bound, upper_bound } = .lower_bound,
     prefetch: bool = true,
@@ -342,8 +343,10 @@ pub inline fn binary_search_keys_range(
 }
 
 const test_binary_search = struct {
+    // 引入相关的依赖
     const fuzz = @import("../testing/fuzz.zig");
 
+    // 就是一个作用域
     const log = false;
 
     const gpa = std.testing.allocator;
@@ -363,6 +366,7 @@ const test_binary_search = struct {
             var expect: BinarySearchResult = .{ .index = 0, .exact = false };
             for (keys, 0..) |key, i| {
                 switch (std.math.order(key, target_key)) {
+                    // 小于
                     .lt => expect.index = @as(u32, @intCast(i)) + 1,
                     .eq => {
                         expect.index = @as(u32, @intCast(i));

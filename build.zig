@@ -14,6 +14,7 @@ pub fn build(b: *std.Build) !void {
     const mode = b.standardOptimizeOption(.{});
     const emit_llvm_ir = b.option(bool, "emit-llvm-ir", "Emit LLVM IR (.ll file)") orelse false;
 
+    // 在编译的时候添加一些选项
     const options = b.addOptions();
 
     var shell = Shell.create(b.allocator) catch unreachable;
@@ -64,6 +65,8 @@ pub fn build(b: *std.Build) !void {
     options.addOption(config.HashLogMode, "hash_log_mode", hash_log_mode);
 
     const vsr_options_module = options.createModule();
+    // 指定创建vsr_options的依赖，用来指定编译选项
+    // 代码来使用 @import("vsr_options");
     const vsr_module = b.addModule("vsr", .{
         .source_file = .{ .path = "src/vsr.zig" },
         .dependencies = &.{
