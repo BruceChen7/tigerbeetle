@@ -50,7 +50,8 @@ pub fn KWayMergeIteratorType(
         /// For each key in keys above, the corresponding index of the stream containing that key.
         /// This decouples the order and storage of streams, the user being responsible for storage.
         /// The user's streams array is never reordered while keys are swapped, only this mapping.
-        /// streams[0] 表示的是当前root节点来自哪一路
+        /// streams[0] 表示的是当前keys[0]来自哪一路
+        /// streams[1] 表示的是keys[1]来自哪一路
         streams: [k_max]u32,
 
         /// The number of streams remaining in the iterator.
