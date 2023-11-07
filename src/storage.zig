@@ -13,6 +13,7 @@ const vsr = @import("vsr.zig");
 
 pub const Storage = struct {
     /// See usage in Journal.write_sectors() for details.
+    /// 默认使用的方式
     pub const synchronicity: enum {
         always_synchronous,
         always_asynchronous,
@@ -73,12 +74,15 @@ pub const Storage = struct {
     pub const NextTick = struct {
         next: ?*NextTick = null,
         source: NextTickSource,
+        // 指定下一个Tick的回调
         callback: *const fn (next_tick: *NextTick) void,
     };
 
     pub const NextTickSource = enum { lsm, vsr };
 
+    // 读写IO的方式
     io: *IO,
+    // 文件描述符
     fd: os.fd_t,
 
     next_tick_queue: FIFO(NextTick) = .{ .name = "storage_next_tick" },
@@ -93,11 +97,13 @@ pub const Storage = struct {
     }
 
     pub fn deinit(storage: *Storage) void {
+        // 前提是已经是空了
         assert(storage.next_tick_queue.empty());
         assert(storage.fd != IO.INVALID_FILE);
         storage.fd = IO.INVALID_FILE;
     }
 
+    // 用来bush相关的io操作
     pub fn tick(storage: *Storage) void {
         storage.io.tick() catch |err| {
             log.warn("tick: {}", .{err});
@@ -118,6 +124,7 @@ pub const Storage = struct {
 
         storage.next_tick_queue.push(next_tick);
 
+        // 开启调度
         if (!storage.next_tick_completion_scheduled) {
             storage.next_tick_completion_scheduled = true;
             storage.io.timeout(

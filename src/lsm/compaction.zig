@@ -56,8 +56,10 @@ pub fn CompactionType(
     comptime Storage: type,
 ) type {
     return struct {
+        // 都是类型
         const Compaction = @This();
 
+        // 都是类型
         const Grid = GridType(Storage);
         const BlockPtr = Grid.BlockPtr;
         const BlockPtrConst = Grid.BlockPtrConst;
@@ -75,11 +77,13 @@ pub fn CompactionType(
 
         const TableInfoReference = Manifest.TableInfoReference;
 
+        // 类型
         pub const TableInfoA = union(enum) {
             immutable: []const Value,
             disk: TableInfoReference,
         };
 
+        // 指定上下文
         pub const Context = struct {
             grid: *Grid,
             tree: *Tree,
@@ -116,6 +120,7 @@ pub fn CompactionType(
 
         /// Manifest log appends are queued up until `finish()` is explicitly called to ensure
         /// they are applied deterministically relative to other concurrent compactions.
+        /// 清单列表
         manifest_entries: stdx.BoundedArray(struct {
             operation: enum {
                 insert_to_level_b,
@@ -148,6 +153,8 @@ pub fn CompactionType(
             remaining,
             exhausted,
         },
+        // 状态
+        // union tag
         state: union(enum) {
             idle,
             next_tick,
@@ -167,13 +174,17 @@ pub fn CompactionType(
         tracer_slot: ?tracer.SpanStart,
         iterator_tracer_slot: ?tracer.SpanStart,
 
+        // 返回一个 Compaction
         pub fn init(allocator: Allocator, tree_config: Tree.Config) !Compaction {
+            // 返回一个table 的迭代器
             var iterator_a = TableDataIterator.init();
             errdefer iterator_a.deinit();
 
+            // 迭代器b
             var iterator_b = LevelTableValueBlockIterator.init();
             errdefer iterator_b.deinit();
 
+            // a index
             const index_block_a = try allocate_block(allocator);
             errdefer allocator.free(index_block_a);
 
@@ -348,6 +359,7 @@ pub fn CompactionType(
                 .move_table = move_table,
             };
 
+            // 移动表
             if (move_table) {
                 // If we can just move the table, don't bother with compaction.
 

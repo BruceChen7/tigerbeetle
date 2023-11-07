@@ -25,6 +25,7 @@ pub fn ManifestLevelType(
     return struct {
         const Self = @This();
 
+        // 定义为类型
         pub const Keys = SortedSegmentedArray(
             Key,
             NodePool,
@@ -38,6 +39,7 @@ pub fn ManifestLevelType(
             .{},
         );
 
+        // 定义类型
         pub const Tables = SortedSegmentedArray(
             TableInfo,
             NodePool,

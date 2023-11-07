@@ -15,11 +15,14 @@ pub fn TableMemoryType(comptime Table: type) type {
     return struct {
         const TableMemory = @This();
 
+        // 定义value的context
         pub const ValueContext = struct {
+            // 下一个value插入的位置
             count: usize = 0,
             sorted: bool = true,
         };
 
+        // 定义类型
         const Mutability = union(enum) {
             mutable,
             immutable: struct {
@@ -29,6 +32,7 @@ pub fn TableMemoryType(comptime Table: type) type {
             },
         };
 
+        // 在memory中的值
         values: []Value,
         value_context: ValueContext,
         mutability: Mutability,
@@ -51,6 +55,7 @@ pub fn TableMemoryType(comptime Table: type) type {
         }
 
         pub fn deinit(table: *TableMemory, allocator: mem.Allocator) void {
+            // 删除相关的value
             allocator.free(table.values);
         }
 
@@ -76,6 +81,8 @@ pub fn TableMemoryType(comptime Table: type) type {
             return table.values[0..table.value_context.count];
         }
 
+        // 必须放入少于value_count_max的个数的value
+        // 注意这里是指针
         pub fn put(table: *TableMemory, value: *const Value) void {
             assert(table.mutability == .mutable);
             assert(table.value_context.count < value_count_max);
@@ -88,7 +95,9 @@ pub fn TableMemoryType(comptime Table: type) type {
                 assert(table.value_context.count > 0);
             }
 
+            // 下一个value插入的放入的位置
             table.values[table.value_context.count] = value.*;
+            // 当前values 数+ 1
             table.value_context.count += 1;
         }
 
@@ -127,6 +136,7 @@ pub fn TableMemoryType(comptime Table: type) type {
             return null;
         }
 
+        // 将mutable 转换成mutable
         pub fn make_immutable(table: *TableMemory, snapshot_min: u64) void {
             assert(table.mutability == .mutable);
             assert(table.value_context.count <= value_count_max);
@@ -150,6 +160,7 @@ pub fn TableMemoryType(comptime Table: type) type {
             } };
         }
 
+        // 转换成mutable
         pub fn make_mutable(table: *TableMemory) void {
             assert(table.mutability == .immutable);
             assert(table.mutability.immutable.flushed == true);

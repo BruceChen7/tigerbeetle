@@ -3,6 +3,7 @@ const assert = std.debug.assert;
 const math = std.math;
 const mem = std.mem;
 
+// 重新起别名
 const Direction = @import("direction.zig").Direction;
 
 pub fn KWayMergeIteratorType(
@@ -16,18 +17,22 @@ pub fn KWayMergeIteratorType(
     /// Returns Drained if the stream was consumed and
     /// must be refilled before calling peek() again.
     /// Returns Empty if the stream was fully consumed and reached the end.
+    ///  这是一个回调
     comptime stream_peek: fn (
         context: *const Context,
         stream_index: u32,
     ) error{ Empty, Drained }!Key,
+    // 函数指针
     comptime stream_pop: fn (context: *Context, stream_index: u32) Value,
     /// Returns true if stream A has higher precedence than stream B.
     /// This is used to deduplicate values across streams.
+    /// 优先级
     comptime stream_precedence: fn (context: *const Context, a: u32, b: u32) bool,
 ) type {
     return struct {
         const Self = @This();
 
+        // 指定上下文，用户侧的上下文
         context: *Context,
 
         /// Array of keys, with each key representing the next key in each stream.
@@ -38,11 +43,14 @@ pub fn KWayMergeIteratorType(
         /// * When `direction=ascending`, keys are ordered low-to-high.
         /// * When `direction=descending`, keys are ordered high-to-low.
         /// * Equivalent keys are ordered from high precedence to low.
+        /// 用于存储排好序的key
+        /// 最多k_max路
         keys: [k_max]Key,
 
         /// For each key in keys above, the corresponding index of the stream containing that key.
         /// This decouples the order and storage of streams, the user being responsible for storage.
         /// The user's streams array is never reordered while keys are swapped, only this mapping.
+        /// streams[0] 表示的是当前root节点来自哪一路
         streams: [k_max]u32,
 
         /// The number of streams remaining in the iterator.
@@ -61,6 +69,7 @@ pub fn KWayMergeIteratorType(
                 .context = context,
                 .keys = undefined,
                 .streams = undefined,
+                // 默认从0，开始
                 .k = 0,
                 .direction = direction,
             };
@@ -76,7 +85,9 @@ pub fn KWayMergeIteratorType(
                     error.Drained => unreachable,
                     error.Empty => continue,
                 };
+
                 it.streams[it.k] = stream_index;
+                // 保持有序
                 it.up_heap(it.k);
                 it.k += 1;
             }
@@ -107,27 +118,38 @@ pub fn KWayMergeIteratorType(
         }
 
         fn pop_internal(it: *Self) error{Drained}!?Value {
+            // 在迭代器中，待读剩余的流存在为0
             if (it.k == 0) return null;
 
             // We update the heap prior to removing the value from the stream. If we updated after
             // stream_pop() instead, when stream_peek() returns Drained we would be unable to order
             // the heap, and when the stream does buffer data it would be out of position.
             if (stream_peek(it.context, it.streams[0])) |key| {
+                // 如果当前root的存在
+                // 更新root
                 it.keys[0] = key;
+                // 调整heap
                 it.down_heap();
             } else |err| switch (err) {
                 error.Drained => return error.Drained,
+                // 该路已经读完了
                 error.Empty => {
+                    // 开始调整heap
                     it.swap(0, it.k - 1);
+                    // 减少一路
                     it.k -= 1;
+                    // ix
                     it.down_heap();
                 },
             }
+            // 不存在待读的流，直接返回
             if (it.k == 0) return null;
 
+            // 获取root的值，返回的是哪一路
             const root = it.streams[0];
+            // 获取哪一路的值，并删除
             const value = stream_pop(it.context, root);
-
+            // 返回值
             return value;
         }
 
@@ -143,13 +165,17 @@ pub fn KWayMergeIteratorType(
         // Compare the current node with its children, if the order is correct stop.
         // If the order is incorrect, swap the current node with the appropriate child.
         fn down_heap(it: *Self) void {
+            // 如果剩余待读的流为0，直接返回
             if (it.k == 0) return;
             var i: u32 = 0;
             // A maximum of height iterations are required. After height iterations we are
             // guaranteed to have reached a leaf node, in which case we are always done.
             var safety_count: u32 = 0;
+            // 二叉数的高度计算
             const binary_tree_height = math.log2_int(u32, it.k) + 1;
+            // 迭代次数
             while (safety_count < binary_tree_height) : (safety_count += 1) {
+                // 获取it.k中的左孩子节点
                 const left = left_child(i, it.k);
                 const right = right_child(i, it.k);
 
@@ -195,6 +221,7 @@ pub fn KWayMergeIteratorType(
         }
 
         inline fn ordered(it: Self, a: u32, b: ?u32) bool {
+            // 是否有序
             return b == null or switch (std.math.order(it.keys[a], it.keys[b.?])) {
                 .lt => it.direction == .ascending,
                 .eq => stream_precedence(it.context, it.streams[a], it.streams[b.?]),
@@ -204,6 +231,7 @@ pub fn KWayMergeIteratorType(
     };
 }
 
+// 指定测试后上下文
 fn TestContext(comptime k_max: u32) type {
     const testing = std.testing;
 
@@ -223,19 +251,23 @@ fn TestContext(comptime k_max: u32) type {
 
         streams: [k_max][]const Value,
 
+        // 测试回调
         fn stream_peek(context: *const Self, stream_index: u32) error{ Empty, Drained }!u32 {
             // TODO: test for Drained somehow as well.
             const stream = context.streams[stream_index];
             if (stream.len == 0) return error.Empty;
+            // 返回第一个key
             return stream[0].key;
         }
 
+        // 返回第一个key，并将第一个移除
         fn stream_pop(context: *Self, stream_index: u32) Value {
             const stream = context.streams[stream_index];
             context.streams[stream_index] = stream[1..];
             return stream[0];
         }
 
+        // 获取优先级
         fn stream_precedence(context: *const Self, a: u32, b: u32) bool {
             _ = context;
 
@@ -243,6 +275,7 @@ fn TestContext(comptime k_max: u32) type {
             return a > b;
         }
 
+        // 用来测试的接口
         fn merge(
             direction: Direction,
             streams_keys: []const []const u32,
@@ -266,9 +299,12 @@ fn TestContext(comptime k_max: u32) type {
             for (streams_keys, 0..) |stream_keys, i| {
                 errdefer for (streams[0..i]) |s| testing.allocator.free(s);
                 streams[i] = try testing.allocator.alloc(Value, stream_keys.len);
+                // 初始化
                 for (stream_keys, 0..) |key, j| {
+                    // 多路的定义
                     streams[i][j] = .{
                         .key = key,
+                        // 行号
                         .version = @as(u32, @intCast(i)),
                     };
                 }
@@ -276,8 +312,10 @@ fn TestContext(comptime k_max: u32) type {
             defer for (streams[0..streams_keys.len]) |s| testing.allocator.free(s);
 
             var context: Self = .{ .streams = streams };
+            //  streams_keys.len多少行数
             var kway = KWay.init(&context, @as(u32, @intCast(streams_keys.len)), direction);
 
+            // 每次弹出一个value，迭代器模式
             while (try kway.pop()) |value| {
                 try actual.append(value);
             }
@@ -393,12 +431,14 @@ fn TestContext(comptime k_max: u32) type {
     };
 }
 
+// k 路合并算法
 test "k_way_merge: unit" {
     try TestContext(1).merge(
         .ascending,
         &[_][]const u32{
             &[_]u32{ 0, 3, 4, 8 },
         },
+        // 结果
         &[_]TestContext(1).Value{
             .{ .key = 0, .version = 0 },
             .{ .key = 3, .version = 0 },
@@ -421,10 +461,12 @@ test "k_way_merge: unit" {
     try TestContext(3).merge(
         .ascending,
         &[_][]const u32{
+            // 3路合并
             &[_]u32{ 0, 3, 4, 8, 11 },
             &[_]u32{ 2, 11, 12, 13, 15 },
             &[_]u32{ 1, 2, 11 },
         },
+        // 输出的结果
         &[_]TestContext(3).Value{
             .{ .key = 0, .version = 0 },
             .{ .key = 1, .version = 2 },
@@ -438,6 +480,7 @@ test "k_way_merge: unit" {
             .{ .key = 15, .version = 1 },
         },
     );
+    // 降序排列
     try TestContext(3).merge(
         .descending,
         &[_][]const u32{

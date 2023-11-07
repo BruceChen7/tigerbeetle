@@ -27,6 +27,7 @@ const TracerStats = struct {
 };
 
 /// Each Key is associated with a set of n consecutive ways (or slots) that may contain the Value.
+/// N 路关联的cache，每个key只能被映射到N个slot中其中的一个
 pub fn SetAssociativeCacheType(
     comptime Key: type,
     comptime Value: type,
@@ -88,6 +89,7 @@ pub fn SetAssociativeCacheType(
     return struct {
         const Self = @This();
 
+        // 指定的类型
         const Tag = meta.Int(.unsigned, layout.tag_bits);
         const Count = meta.Int(.unsigned, layout.clock_bits);
         const Clock = meta.Int(.unsigned, clock_hand_bits);
@@ -265,6 +267,7 @@ pub fn SetAssociativeCacheType(
             var it = BitIterator(Ways){ .bits = ways };
             while (it.next()) |way| {
                 const count = self.counts.get(set.offset + way);
+                // 找到了相关的key
                 if (count > 0 and key_from_value(&set.values[way]) == key) {
                     return way;
                 }
@@ -385,6 +388,7 @@ pub fn SetAssociativeCacheType(
         };
 
         inline fn associate(self: *const Self, key: Key) Set {
+            // 获取key关联的哪一路cache
             const entropy = hash(key);
 
             const tag = @as(Tag, @truncate(entropy >> math.log2_int(u64, self.sets)));
@@ -566,6 +570,7 @@ test "SetAssociativeCache: eviction" {
     try set_associative_cache_test(Key, Value, context, .{}).run();
 }
 
+// hash 碰撞测试
 test "SetAssociativeCache: hash collision" {
     const Key = u64;
     const Value = u64;

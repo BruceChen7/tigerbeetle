@@ -61,10 +61,21 @@ The last level in the LSM tree has no target level so it is never a source level
 Each compaction compacts a [single table](#compaction-selection-policy) from `level_a` into all tables in
 `level_b` which intersect the `level_a` table's key range.
 
+* 最多有`⌈levels/2⌉`个正在运行的 compaction
+* 源 level 是 level_a，目标 level 是 level_b
+* 最后一个 level 不是 source level
+* 每个 compaction 将 level_a 的一个 table 合并到 level_b 中所有相交的 table
+
 Invariants:
 * At the end of every beat, there is space in mutable table for the next beat.
 * The manifest log is compacted during every half-bar.
 * The compactions' output tables are not [visible](#snapshots-and-compaction) until the compaction has finished.
+
+不变式
+* 每个 beat 完成后，mutable table 存在下一 beat 的空间
+* manifest log 会在每个 half-bar 合并
+* compaction 的输出 table 不会在 compaction 完成前可见
+
 
 1. First half-bar, first beat ("first beat"):
     * Assert no compactions are currently running.
@@ -74,10 +85,21 @@ Invariants:
     * Acquire reservations from the Free Set for all blocks (upper-bound) that will be written
       during this half-bar.
 
+1. 第一个 half-bar，第一个 beat ("first beat"):
+    * 不会有正在运行的 compaction
+    * 允许 per level table limit 越界，比如我们可能从 level A 移动到 level B, level B 已经满了
+    * 开始从 level A 中的偶数级的 table limit 越限的 table 开始 compaction
+    * 获取所有保留的空间 (upper-bound) 用于写入此 half-bar，也就是向上取整
+
 2. First half-bar, last beat:
     * Finish ticking any incomplete even-level compactions.
     * Assert on callback completion that all compactions are complete.
     * Release reservations from the Free Set.
+
+2. 第一个 half-bar，最后一个 beat:
+    * 完成正在进行的偶数级的 compaction
+    * 完成所有 compaction
+    * 释放保留的空间
 
 3. Second half-bar, first beat ("middle beat"):
     * Assert no compactions are currently running.
@@ -86,6 +108,12 @@ Invariants:
     * Acquire reservations from the Free Set for all blocks (upper-bound) that will be written
       during this half-bar.
 
+3. 第二个 half-bar，第一个 beat ("middle beat"):
+    * 不会有正在运行的 compaction
+    * 开始从 level B 中的奇数级的 table limit 越限的 table 开始 compaction
+    * 如果 immutable table 有值，则合并
+    * 获取所有保留的空间 (upper-bound) 用于写入此 half-bar，也就是向上取整
+
 4. Second half-bar, last beat:
     * Finish ticking any incomplete odd-level and immutable table compactions.
     * Assert on callback completion that all compactions are complete.
@@ -93,12 +121,23 @@ Invariants:
     * Flush, clear, and sort mutable table values into immutable table for next bar.
     * Remove input tables that are invisible to all current and persisted snapshots.
     * Release reservations from the Free Set.
+4. 第二个 half-bar，最后一个 beat
+    * 完成正在进行的奇数级的 compaction
+    * 完成所有 compaction
+    * 检查所有 level 的 table count 是否溢出
+    * 刷新 mutable table 的值到 immutable table
+    * 删除不可见的 table
+    * 释放保留的空间
 
 ### Compaction Selection Policy
 
 Compaction selects the table from level `A` which overlaps the fewest visible tables of level `B`.
 
+压缩选择是从 level A 中选择与 level B 中最少可见的 table
+
 For example, in the following table (with `lsm_growth_factor=2`), each table is depicted as the range of keys it includes. The tables with uppercase letters would be chosen for compaction next.
+
+举例：在下面的表中 (使用 lsm_growth_factor=2)，每个表都是其包含的键的范围。大写字母的表将被下一次压缩选
 
 ```
 Level 0   A─────────────H       l───────────────────────────z
@@ -118,16 +157,24 @@ When the [selected input table](#compaction-selection-policy) from level `A` doe
 input tables in level `B`, the input table can be "moved" to level `B`.
 That is, instead of sort-merging `A` and `B`, just update the input table's metadata in the manifest.
 
+当 [选中的输入表](#compaction-selection-policy) 从 level A 未与 level B 中任何表重叠时，输入表可以被“移动”到 level B
+
 This is referred to as the _move table_ optimization.
+
+这个称之为移动表优化
 
 Where a tree performs inserts mostly in sort order, with a minimum of updates, this _move table_
 optimization should enable the tree's performance to approach that of an append-only log.
+
+这个 move table 优化应该使树的性能接近 log 的 append-only 的性功能
 
 #### Compaction Table Overlap
 
 Applying [this](#compaction-selection-policy) selection policy while compacting a table
 from level A to level B, what is the maximum number of level-B tables that may overlap with the
 selected level-A table (i.e. the "worst case")?
+
+应用 [这个](#compaction-selection-policy) 选择策略并压缩 level A 到 level B 的表，最大可能重叠的 level-B 表有多少？
 
 Perhaps surprisingly, this is `lsm_growth_factor`:
 
@@ -140,6 +187,17 @@ Perhaps surprisingly, this is `lsm_growth_factor`:
 - If any table in level `A` overlaps _more than_ `lsm_growth_factor` tables in level `B`,
   that implies the existence of a table in level `A` with _less than_ `lsm_growth_factor` overlap.
   The latter table would be selected over the former.
+
+可能这是 `lsm_growth_factor`:
+
+- 层内的表是不相交的
+- level `B` 只有 `lsm_growth_factor` 倍的表
+- 触发压缩，level `A` 的可见表数超过 table_count_max_for_level(lsm_growth_factor, level_a）
+- 选择策略选择 level `A` 中的表，重叠最少的可见表
+- 如果 level `A` 中的任何表重叠的 _多于_ `lsm_growth_factor` 表
+  这意味着 level `A` 中的 _少于_ `lsm_growth_factor` 表
+  这个表被选择
+
 
 ## Snapshots
 

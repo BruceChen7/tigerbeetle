@@ -66,6 +66,7 @@ pub const IO = struct {
         // We cannot use `self.ring.sq_ready()` here since this counts flushed and unflushed SQEs.
         const queued = self.ring.sq.sqe_tail -% self.ring.sq.sqe_head;
         if (queued > 0) {
+            // 提交队列中的SQE
             try self.flush_submissions(0, &timeouts, &etime);
             assert(etime == false);
         }
@@ -198,6 +199,7 @@ pub const IO = struct {
     fn flush_submissions(self: *IO, wait_nr: u32, timeouts: *usize, etime: *bool) !void {
         while (true) {
             const submitted = self.ring.submit_and_wait(wait_nr) catch |err| switch (err) {
+                // 忽略相关的错误
                 error.SignalInterrupt => continue,
                 // Wait for some completions and then try again:
                 // See https://github.com/axboe/liburing/issues/281 re: error.SystemResources.
@@ -869,6 +871,7 @@ pub const IO = struct {
 
     pub const TimeoutError = error{Canceled} || os.UnexpectedError;
 
+    // 超时时间到
     pub fn timeout(
         self: *IO,
         comptime Context: type,
@@ -881,6 +884,7 @@ pub const IO = struct {
         completion: *Completion,
         nanoseconds: u63,
     ) void {
+        // 指定相关的io完成上下文
         completion.* = .{
             .io = self,
             .context = context,
@@ -903,6 +907,7 @@ pub const IO = struct {
         // Special case a zero timeout as a yield.
         if (nanoseconds == 0) {
             completion.result = -@as(i32, @intCast(@intFromEnum(std.os.E.TIME)));
+            // 马上开始执行回调
             self.completed.push(completion);
             return;
         }

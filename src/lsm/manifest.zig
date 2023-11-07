@@ -133,6 +133,7 @@ pub fn TreeTableInfoType(comptime Table: type) type {
     };
 }
 
+// 用来定义清单类型
 pub fn ManifestType(comptime Table: type, comptime Storage: type) type {
     const Key = Table.Key;
 
@@ -178,9 +179,12 @@ pub fn ManifestType(comptime Table: type, comptime Storage: type) type {
         snapshot_max: u64 = 1,
 
         pub fn init(allocator: mem.Allocator, node_pool: *NodePool, config: TreeConfig) !Manifest {
+            // 几层 LSM
             var levels: [constants.lsm_levels]Level = undefined;
             for (&levels, 0..) |*level, i| {
+                // 这种方式来处理已经分配的内存
                 errdefer for (levels[0..i]) |*l| l.deinit(allocator, node_pool);
+                // 是指针
                 level.* = try Level.init(allocator);
             }
             errdefer for (&levels) |*level| level.deinit(allocator, node_pool);
@@ -193,6 +197,7 @@ pub fn ManifestType(comptime Table: type, comptime Storage: type) type {
         }
 
         pub fn deinit(manifest: *Manifest, allocator: mem.Allocator) void {
+            // 清理内存
             for (&manifest.levels) |*level| level.deinit(allocator, manifest.node_pool);
         }
 
@@ -213,6 +218,7 @@ pub fn ManifestType(comptime Table: type, comptime Storage: type) type {
             manifest.manifest_log = manifest_log;
         }
 
+        // 插入一张lsm的table信息
         pub fn insert_table(
             manifest: *Manifest,
             level: u8,
@@ -227,6 +233,7 @@ pub fn ManifestType(comptime Table: type, comptime Storage: type) type {
 
             // Append insert changes to the manifest log.
             const log_level = @as(u6, @intCast(level));
+            // manifest的log文件
             manifest.manifest_log.?.insert(log_level, &table.encode(manifest.config.id));
 
             if (constants.verify) {

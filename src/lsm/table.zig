@@ -23,6 +23,7 @@ pub const TableUsage = enum {
     /// * Only remove keys which are present.
     /// * TableKey == TableValue (modulo padding, eg CompositeKey)
     /// Then we can unlock additional optimizations.
+    /// 辅助索引？
     secondary_index,
 };
 
@@ -32,7 +33,9 @@ const checksum_size = @sizeOf(u128);
 const block_size = constants.block_size;
 const block_body_size = block_size - @sizeOf(vsr.Header);
 
+// 每个元素都一个size
 const BlockPtr = *align(constants.sector_size) [block_size]u8;
+// 定义相关的类型
 const BlockPtrConst = *align(constants.sector_size) const [block_size]u8;
 
 /// A table is a set of blocks:
@@ -61,18 +64,23 @@ pub fn TableType(
         const Table = @This();
 
         // Re-export all the generic arguments.
+        // 是int
+        // 这些都是类型
         pub const Key = TableKey;
         pub const Value = TableValue;
+        // 根据key返回对应的value
         pub const key_from_value = table_key_from_value;
         pub const sentinel_key = table_sentinel_key;
         pub const tombstone = table_tombstone;
         pub const tombstone_from_key = table_tombstone_from_key;
         pub const value_count_max = table_value_count_max;
+        // 有默认值
         pub const usage = table_usage;
 
         // Export hashmap context for Key and Value
         pub const HashMapContextValue = struct {
             pub inline fn eql(_: HashMapContextValue, a: Value, b: Value) bool {
+                // 比较key是否相同
                 return key_from_value(&a) == key_from_value(&b);
             }
 
@@ -89,6 +97,7 @@ pub fn TableType(
             // TODO(ifreund) What are our alignment expectations for Value?
 
             // There must be no padding in the Key/Value types to avoid buffer bleeds.
+            // 不允许填充，避免缓冲区溢出
             assert(stdx.no_padding(Key));
             assert(stdx.no_padding(Value));
 
@@ -100,6 +109,7 @@ pub fn TableType(
             assert(key_size == 8 or key_size == 16 or key_size == 24 or key_size == 32);
         }
 
+        // 编译期间相关数据结构对齐
         pub const layout = layout: {
             assert(block_size % constants.sector_size == 0);
             assert(math.isPowerOfTwo(block_size));
@@ -128,6 +138,7 @@ pub fn TableType(
         pub const data_block_count_max = layout.data_block_count_max;
         pub const block_count_max = index_block_count + data_block_count_max;
 
+        // 指定的常量，相当于都是在Table的名字空间里面
         const index = schema.TableIndex.init(.{
             .key_size = key_size,
             .data_block_count_max = data_block_count_max,
@@ -139,6 +150,7 @@ pub fn TableType(
         });
 
         const compile_log_layout = false;
+        // 打印
         comptime {
             if (compile_log_layout) {
                 @compileError(std.fmt.comptimePrint(
@@ -203,6 +215,7 @@ pub fn TableType(
             assert(index_block_count > 0);
             assert(data_block_count_max > 0);
 
+            // 索引大小
             assert(index.size == @sizeOf(vsr.Header) +
                 data_block_count_max * ((key_size * 2) + address_size + checksum_size));
             assert(index.size == index.data_addresses_offset + index.data_addresses_size);
@@ -226,6 +239,7 @@ pub fn TableType(
             assert(block_size == data.padding_offset + data.padding_size);
 
             // We expect no block padding at least for TigerBeetle's objects and indexes:
+            // key的大小和value的大小
             if ((key_size == 8 and value_size == 128) or
                 (key_size == 8 and value_size == 64) or
                 (key_size == 16 and value_size == 16) or
@@ -235,6 +249,7 @@ pub fn TableType(
             }
         }
 
+        // 用来构建Table
         pub const Builder = struct {
             const TreeTableInfo = TreeTableInfoType(Table);
 
@@ -267,6 +282,7 @@ pub fn TableType(
                 builder.* = undefined;
             }
 
+            // reset为指定相关的block
             pub fn reset(builder: *Builder) void {
                 @memset(builder.index_block, 0);
                 @memset(builder.data_block, 0);
@@ -455,6 +471,7 @@ pub fn TableType(
                 .key_min => index.keys_min_offset,
                 .key_max => index.keys_max_offset,
             };
+            // mem.bytesAsSlice returns a slice of Key
             return mem.bytesAsSlice(Key, index_block[offset..][0..index.keys_size]);
         }
 
@@ -491,6 +508,7 @@ pub fn TableType(
             return if (key < key_min) null else data_block_index;
         }
 
+        // index block 定义
         pub const IndexBlocks = struct {
             data_block_address: u64,
             data_block_checksum: u128,
@@ -598,6 +616,7 @@ pub fn TableType(
 test "Table" {
     const CompositeKey = @import("composite_key.zig").CompositeKeyType(u128);
 
+    // 创建一个 Table
     const Table = TableType(
         CompositeKey.Key,
         CompositeKey,

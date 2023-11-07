@@ -106,6 +106,7 @@ pub fn TreeType(comptime TreeTable: type, comptime Storage: type) type {
             possible: u8,
         };
 
+        // 用来写磁盘
         grid: *Grid,
         config: Config,
         options: Options,
@@ -178,6 +179,7 @@ pub fn TreeType(comptime TreeTable: type, comptime Storage: type) type {
             var table_mutable = try TableMemory.init(allocator, .mutable, config.name);
             errdefer table_mutable.deinit(allocator);
 
+            // immutable tables
             var table_immutable = try TableMemory.init(
                 allocator,
                 .{ .immutable = .{} },
@@ -1164,6 +1166,7 @@ test "table_count_max_for_level/tree" {
 
 test "TreeType" {
     const CompositeKey = @import("composite_key.zig").CompositeKeyType(u64);
+    // 生成一个table
     const Table = @import("table.zig").TableType(
         CompositeKey.Key,
         CompositeKey,

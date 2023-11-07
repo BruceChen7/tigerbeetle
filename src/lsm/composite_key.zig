@@ -12,26 +12,32 @@ pub fn CompositeKeyType(comptime Field: type) type {
         u64 => [0]u8{},
         else => @compileError("invalid Field for CompositeKey: " ++ @typeName(Field)),
     };
+    // 定义Pad类型
     const Pad = @TypeOf(pad);
 
     return extern struct {
         const Self = @This();
 
+        // 哨兵key
         pub const sentinel_key: Key = key_from_value(&.{
             .field = math.maxInt(Field),
             .timestamp = math.maxInt(u64),
         });
 
+        // 第63位为1
         const tombstone_bit: u64 = 1 << 63;
 
         // u128 may be aligned to 8 instead of the expected 16.
         const field_bitsize_alignment = @divExact(@bitSizeOf(Field), 8);
 
+        // 定义key的类型，自定义int的类型
         pub const Key = std.meta.Int(
             .unsigned,
+            // 位数
             @bitSizeOf(u64) + @bitSizeOf(Field) + @bitSizeOf(Pad),
         );
 
+        // 字段
         field: Field align(field_bitsize_alignment),
         /// The most significant bit must be unset as it is used to indicate a tombstone.
         timestamp: u64,
@@ -42,14 +48,18 @@ pub fn CompositeKeyType(comptime Field: type) type {
             assert(@sizeOf(Self) == @sizeOf(Key));
             assert(@alignOf(Self) >= @alignOf(Field));
             assert(@alignOf(Self) == field_bitsize_alignment);
+            // 没有padding
             assert(stdx.no_padding(Self));
         }
 
+        // 定义key_from_value
         pub inline fn key_from_value(value: *const Self) Key {
+            // 取低63位
             return @as(Key, value.timestamp & ~tombstone_bit) | (@as(Key, value.field) << 64);
         }
 
         pub inline fn tombstone(value: *const Self) bool {
+            // 是否已经标记为tombstone
             return (value.timestamp & tombstone_bit) != 0;
         }
 
@@ -73,6 +83,7 @@ fn composite_key_test(comptime CompositeKey: type) !void {
         try std.testing.expect(a < b);
     }
 
+    // 从value反推key
     {
         const a = CompositeKey.key_from_value(&.{ .field = 1, .timestamp = 100 });
         const b = CompositeKey.key_from_value(&.{ .field = 2, .timestamp = 99 });

@@ -34,6 +34,7 @@ pub fn LevelTableValueBlockIteratorType(comptime Table: type, comptime Storage: 
         const TableInfo = Manifest.TableInfo;
         const TableDataIterator = TableDataIteratorType(Storage);
 
+        // 指定上下文
         pub const Context = struct {
             grid: *Grid,
             level: u8,
@@ -45,6 +46,7 @@ pub fn LevelTableValueBlockIteratorType(comptime Table: type, comptime Storage: 
             direction: Direction,
         };
 
+        // 行数指针
         pub const IndexCallback = *const fn (it: *LevelTableValueBlockIterator) void;
         pub const DataCallback = *const fn (it: *LevelTableValueBlockIterator, data_block: ?BlockPtrConst) void;
         pub const Callback = struct {
@@ -56,12 +58,14 @@ pub fn LevelTableValueBlockIteratorType(comptime Table: type, comptime Storage: 
         context: Context,
 
         /// Internal state.
+        /// 用来获取table数据
         table_data_iterator: TableDataIterator,
         table_index: usize = 0,
 
         read: Grid.Read = undefined,
         next_tick: Grid.NextTick = undefined,
 
+        // 指定回调的类型
         callback: union(enum) {
             none,
             level_next: Callback,
@@ -93,6 +97,7 @@ pub fn LevelTableValueBlockIteratorType(comptime Table: type, comptime Storage: 
             };
         }
 
+        // 指定开始
         pub fn start(
             it: *LevelTableValueBlockIterator,
             context: Context,
@@ -132,6 +137,7 @@ pub fn LevelTableValueBlockIteratorType(comptime Table: type, comptime Storage: 
                     .{ .cache_read = true, .cache_write = true },
                 );
             } else {
+                // 迭代下一个table
                 it.table_next(callback);
             }
         }
@@ -156,6 +162,7 @@ pub fn LevelTableValueBlockIteratorType(comptime Table: type, comptime Storage: 
                 .direction = it.context.direction,
             });
             callback.on_index(it);
+            // 下一个level
             it.table_index += 1;
             it.table_next(callback);
         }

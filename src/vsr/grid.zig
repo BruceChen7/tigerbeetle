@@ -31,6 +31,7 @@ pub fn allocate_block(
 /// Each block is identified by an "address" (`u64`, beginning at 1).
 ///
 /// Recently/frequently-used blocks are transparently cached in memory.
+/// 用来生成类型
 pub fn GridType(comptime Storage: type) type {
     const block_size = constants.block_size;
     const SuperBlock = SuperBlockType(Storage);
